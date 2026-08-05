@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String       @id @default(cuid())
+  githubId    String       @unique @map("github_id")
+  githubLogin String       @map("github_login")
+  avatarUrl   String       @map("avatar_url")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  vercelToken VercelToken?
+
+  @@map("users")
+}
+
+model VercelToken {
+  id             String   @id @default(cuid())
+  userId         String   @unique @map("user_id")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  encryptedToken String   @map("encrypted_token")
+  vercelUserId   String?  @map("vercel_user_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("vercel_tokens")
+}
