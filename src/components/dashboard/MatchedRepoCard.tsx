@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
+import { useHideRepo } from '../../hooks/useRepos'
 import type { MatchedRepo } from '../../types/dashboard'
 import { formatDateTime } from '../../utils/formatDate'
 import { StatusBadge } from './StatusBadge'
@@ -7,8 +9,16 @@ export function MatchedRepoCard({ item }: { item: MatchedRepo }) {
   const { repo, vercelProject, latestDeployment } = item
   const deployUrl = latestDeployment?.url ?? vercelProject.productionUrl
   const navigate = useNavigate()
+  const hideRepo = useHideRepo()
 
   const goToDetails = () => navigate(`/repo/${repo.id}`)
+
+  const handleHide = () => {
+    hideRepo.mutate(repo.id, {
+      onSuccess: () => toast.success(`${repo.name}을(를) 숨겼습니다. 설정에서 다시 보이게 할 수 있어요.`),
+      onError: () => toast.error('저장소를 숨기지 못했습니다. 잠시 후 다시 시도해주세요.'),
+    })
+  }
 
   return (
     <div
@@ -33,7 +43,21 @@ export function MatchedRepoCard({ item }: { item: MatchedRepo }) {
           </a>
           <p className="truncate text-xs text-gray-500">{vercelProject.name}</p>
         </div>
-        <StatusBadge status={latestDeployment?.status ?? null} />
+        <div className="flex shrink-0 items-center gap-1">
+          <StatusBadge status={latestDeployment?.status ?? null} />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleHide()
+            }}
+            disabled={hideRepo.isPending}
+            title="이 저장소 숨기기"
+            className="rounded-md border border-gray-300 px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+          >
+            숨기기
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2 text-xs text-gray-500">

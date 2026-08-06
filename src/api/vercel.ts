@@ -6,7 +6,13 @@ export async function connectVercel(token: string): Promise<{ connected: true }>
   return data
 }
 
-export async function fetchVercelProjects(): Promise<VercelProject[]> {
-  const { data } = await apiClient.get<VercelProject[]>('/vercel/projects')
+interface VercelProjectsApiResponse {
+  data: VercelProject[]
+  stale: boolean
+  cachedAt: string
+}
+
+export async function fetchVercelProjects(): Promise<VercelProjectsApiResponse> {
+  const { data } = await apiClient.get<VercelProjectsApiResponse>('/vercel/projects')
   return data
 }

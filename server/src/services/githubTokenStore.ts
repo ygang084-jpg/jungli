@@ -1,16 +1,33 @@
-// GitHub access token은 절대 클라이언트로 내려보내지 않고 서버 메모리에만 보관한다.
-// TODO: 서버 재시작 시 사라지므로, 실제 서비스에서는 prd-webapp.md의 User.github_access_token처럼
-//       암호화해서 DB(PostgreSQL/Supabase)에 저장하고 사용자 id로 조회하도록 교체할 것.
-const store = new Map<string, string>()
+// GitHub access token은 절대 클라이언트로 내려보내지 않고, Vercel 토큰과 동일하게
+// AES-256-GCM으로 암호화해 DB(users.encrypted_github_token)에 저장한다.
+import { prisma } from '../lib/prisma'
+import { encrypt, decrypt } from '../utils/crypto'
 
-export function setGithubAccessToken(userId: string, accessToken: string): void {
-  store.set(userId, accessToken)
+export async function setGithubAccessToken(
+  githubId: string,
+  githubLogin: string,
+  avatarUrl: string,
+  accessToken: string,
+): Promise<void> {
+  const encryptedGithubToken = encrypt(accessToken)
+  await prisma.user.upsert({
+    where: { githubId },
+    update: { githubLogin, avatarUrl, encryptedGithubToken },
+    create: { githubId, githubLogin, avatarUrl, encryptedGithubToken },
+  })
 }
 
-export function getGithubAccessToken(userId: string): string | undefined {
-  return store.get(userId)
+export async function getGithubAccessToken(githubId: string): Promise<string | undefined> {
+  const user = await prisma.user.findUnique({ where: { githubId } })
+  if (!user?.encryptedGithubToken) {
+    return undefined
+  }
+  return decrypt(user.encryptedGithubToken)
 }
 
-export function deleteGithubAccessToken(userId: string): void {
-  store.delete(userId)
+export async function deleteGithubAccessToken(githubId: string): Promise<void> {
+  await prisma.user.updateMany({
+    where: { githubId },
+    data: { encryptedGithubToken: null },
+  })
 }

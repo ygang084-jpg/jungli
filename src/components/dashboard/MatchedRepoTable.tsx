@@ -1,10 +1,20 @@
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
+import { useHideRepo } from '../../hooks/useRepos'
 import type { MatchedRepo } from '../../types/dashboard'
 import { formatDateTime } from '../../utils/formatDate'
 import { StatusBadge } from './StatusBadge'
 
 export function MatchedRepoTable({ items }: { items: MatchedRepo[] }) {
   const navigate = useNavigate()
+  const hideRepo = useHideRepo()
+
+  const handleHide = (id: number, name: string) => {
+    hideRepo.mutate(id, {
+      onSuccess: () => toast.success(`${name}을(를) 숨겼습니다. 설정에서 다시 보이게 할 수 있어요.`),
+      onError: () => toast.error('저장소를 숨기지 못했습니다. 잠시 후 다시 시도해주세요.'),
+    })
+  }
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
@@ -16,6 +26,7 @@ export function MatchedRepoTable({ items }: { items: MatchedRepo[] }) {
             <th className="px-4 py-3 font-medium">상태</th>
             <th className="px-4 py-3 font-medium">배포 URL</th>
             <th className="px-4 py-3 font-medium">마지막 배포</th>
+            <th className="px-4 py-3 font-medium" />
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -61,6 +72,19 @@ export function MatchedRepoTable({ items }: { items: MatchedRepo[] }) {
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-gray-500">
                   {formatDateTime(item.latestDeployment?.createdAt)}
+                </td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleHide(item.repo.id, item.repo.name)
+                    }}
+                    disabled={hideRepo.isPending}
+                    className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    숨기기
+                  </button>
                 </td>
               </tr>
             )

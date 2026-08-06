@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/requireAuth'
 import { getGithubAccessToken } from '../services/githubTokenStore'
 import { getUserWithVercelToken } from '../services/userService'
+import { getHiddenRepoIds } from '../services/hiddenRepos'
 import { decrypt } from '../utils/crypto'
 import { handleApiError } from '../utils/handleApiError'
 import { fetchAllGithubRepos, type GithubRepo } from '../services/github'
@@ -29,25 +30,27 @@ dashboardRouter.get('/', async (req, res) => {
     return
   }
 
-  const githubToken = getGithubAccessToken(userId)
+  const githubToken = await getGithubAccessToken(userId)
   if (!githubToken) {
     res.status(401).json({ message: 'GitHub 연동 정보가 만료되었습니다. 다시 로그인해주세요.' })
     return
   }
 
-  const dbUser = await getUserWithVercelToken(userId)
-  if (!dbUser?.vercelToken) {
-    res.status(404).json({ message: 'Vercel이 연동되어 있지 않습니다.' })
-    return
-  }
-
   try {
+    const dbUser = await getUserWithVercelToken(userId)
+    if (!dbUser?.vercelToken) {
+      res.status(404).json({ message: 'Vercel이 연동되어 있지 않습니다.' })
+      return
+    }
+
     const vercelToken = decrypt(dbUser.vercelToken.encryptedToken)
 
-    const [githubRepos, vercelProjects] = await Promise.all([
+    const [allGithubRepos, vercelProjects, hiddenIds] = await Promise.all([
       fetchAllGithubRepos(githubToken),
       fetchAllVercelProjects(vercelToken),
+      getHiddenRepoIds(userId),
     ])
+    const githubRepos = allGithubRepos.filter((repo) => !hiddenIds.includes(repo.id))
 
     const matched: MatchedRepo[] = []
     const unmatchedRepos: GithubRepo[] = []

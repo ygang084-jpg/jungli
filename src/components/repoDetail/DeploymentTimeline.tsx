@@ -1,6 +1,7 @@
 import type { LatestDeployment } from '../../types/dashboard'
 import { formatDateTime } from '../../utils/formatDate'
-import { STATUS_DOT_COLOR, StatusBadge } from '../dashboard/StatusBadge'
+import { STATUS_DOT_COLOR } from '../../utils/deploymentStatus'
+import { StatusBadge } from '../dashboard/StatusBadge'
 
 export function DeploymentTimeline({ deployments }: { deployments: LatestDeployment[] }) {
   if (deployments.length === 0) {

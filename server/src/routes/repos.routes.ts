@@ -4,9 +4,10 @@ import { getGithubAccessToken } from '../services/githubTokenStore'
 import { fetchAllGithubRepos, fetchGithubRepoById, fetchRecentCommits } from '../services/github'
 import { fetchAllVercelProjects, fetchDeployments, getLinkedRepoFullName } from '../services/vercel'
 import { getUserWithVercelToken } from '../services/userService'
+import { getHiddenRepoIds, hideRepo, unhideRepo } from '../services/hiddenRepos'
 import { decrypt } from '../utils/crypto'
 import { handleApiError } from '../utils/handleApiError'
-import { reposCache } from '../services/caches'
+import { reposCache, dashboardCache } from '../services/caches'
 import type { RepoDetailsResponse } from '../types/repoDetails'
 
 export const reposRouter = Router()
@@ -27,16 +28,20 @@ reposRouter.get('/', async (req, res) => {
     return
   }
 
-  const accessToken = getGithubAccessToken(userId)
+  const accessToken = await getGithubAccessToken(userId)
   if (!accessToken) {
     res.status(401).json({ message: 'GitHub 연동 정보가 만료되었습니다. 다시 로그인해주세요.' })
     return
   }
 
   try {
-    const repos = await fetchAllGithubRepos(accessToken)
-    reposCache.set(userId, repos)
-    res.json({ data: repos, stale: false, cachedAt: new Date().toISOString() })
+    const [repos, hiddenIds] = await Promise.all([
+      fetchAllGithubRepos(accessToken),
+      getHiddenRepoIds(userId),
+    ])
+    const visibleRepos = repos.filter((repo) => !hiddenIds.includes(repo.id))
+    reposCache.set(userId, visibleRepos)
+    res.json({ data: visibleRepos, stale: false, cachedAt: new Date().toISOString() })
   } catch (err) {
     const staleEntry = reposCache.getStale(userId)
     if (staleEntry) {
@@ -54,7 +59,7 @@ reposRouter.get('/', async (req, res) => {
 
 // GET /api/repos/:id/details → 저장소 기본정보+최근 커밋 5개, 연결된 Vercel 프로젝트의 배포 히스토리 10건
 reposRouter.get('/:id/details', async (req, res) => {
-  const accessToken = getGithubAccessToken(req.user!.id)
+  const accessToken = await getGithubAccessToken(req.user!.id)
   if (!accessToken) {
     res.status(401).json({ message: 'GitHub 연동 정보가 만료되었습니다. 다시 로그인해주세요.' })
     return
@@ -91,5 +96,58 @@ reposRouter.get('/:id/details', async (req, res) => {
     res.json(result)
   } catch (err) {
     handleApiError(err, req, res, '저장소 상세 정보를 가져오는 중 오류가 발생했습니다.')
+  }
+})
+
+// GET /api/repos/hidden → 숨긴 저장소 목록 (설정 화면에서 복원할 때 보여주기 위함)
+reposRouter.get('/hidden', async (req, res) => {
+  const userId = req.user!.id
+
+  try {
+    const hiddenIds = await getHiddenRepoIds(userId)
+    if (hiddenIds.length === 0) {
+      res.json({ data: [] })
+      return
+    }
+
+    const accessToken = await getGithubAccessToken(userId)
+    if (!accessToken) {
+      res.status(401).json({ message: 'GitHub 연동 정보가 만료되었습니다. 다시 로그인해주세요.' })
+      return
+    }
+
+    const allRepos = await fetchAllGithubRepos(accessToken)
+    const hiddenSet = new Set(hiddenIds)
+    res.json({ data: allRepos.filter((repo) => hiddenSet.has(repo.id)) })
+  } catch (err) {
+    handleApiError(err, req, res, '숨긴 저장소 목록을 가져오는 중 오류가 발생했습니다.')
+  }
+})
+
+// POST /api/repos/:id/hide → 대시보드/저장소 목록에서 이 저장소를 숨긴다 (GitHub에는 영향 없음)
+reposRouter.post('/:id/hide', async (req, res) => {
+  const userId = req.user!.id
+
+  try {
+    await hideRepo(userId, Number(req.params.id))
+    reposCache.invalidate(userId)
+    dashboardCache.invalidate(userId)
+    res.status(204).end()
+  } catch (err) {
+    handleApiError(err, req, res, '저장소를 숨기는 중 오류가 발생했습니다.')
+  }
+})
+
+// DELETE /api/repos/:id/hide → 숨김 해제
+reposRouter.delete('/:id/hide', async (req, res) => {
+  const userId = req.user!.id
+
+  try {
+    await unhideRepo(userId, Number(req.params.id))
+    reposCache.invalidate(userId)
+    dashboardCache.invalidate(userId)
+    res.status(204).end()
+  } catch (err) {
+    handleApiError(err, req, res, '저장소 숨기기 해제 중 오류가 발생했습니다.')
   }
 })

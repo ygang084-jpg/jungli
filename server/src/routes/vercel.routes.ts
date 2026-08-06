@@ -90,13 +90,13 @@ vercelRouter.get('/projects', async (req, res) => {
     return
   }
 
-  const dbUser = await getUserWithVercelToken(userId)
-  if (!dbUser?.vercelToken) {
-    res.status(404).json({ message: 'Vercel이 연동되어 있지 않습니다.' })
-    return
-  }
-
   try {
+    const dbUser = await getUserWithVercelToken(userId)
+    if (!dbUser?.vercelToken) {
+      res.status(404).json({ message: 'Vercel이 연동되어 있지 않습니다.' })
+      return
+    }
+
     const token = decrypt(dbUser.vercelToken.encryptedToken)
     const projects = await fetchAllVercelProjects(token)
     vercelProjectsCache.set(userId, projects)

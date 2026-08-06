@@ -57,8 +57,8 @@ authRouter.get('/github/callback', async (req, res) => {
     }
     const userId = String(githubUser.id)
 
-    // GitHub access token은 서버 메모리(추후 DB)에만 보관한다. 프론트/쿠키/JWT에는 절대 담지 않는다.
-    setGithubAccessToken(userId, tokenData.access_token)
+    // GitHub access token은 암호화하여 DB에만 보관한다. 프론트/쿠키/JWT에는 절대 담지 않는다.
+    await setGithubAccessToken(userId, githubUser.login, githubUser.avatar_url, tokenData.access_token)
 
     const jwtToken = signUserToken({
       id: userId,
@@ -81,11 +81,11 @@ authRouter.get('/me', (req, res) => {
 })
 
 // POST /api/auth/logout → 쿠키 삭제 + 서버에 보관 중인 GitHub 토큰 폐기
-authRouter.post('/logout', (req, res) => {
+authRouter.post('/logout', async (req, res) => {
   const token = req.cookies?.[AUTH_COOKIE_NAME]
   const user = token ? verifyUserToken(token) : null
   if (user) {
-    deleteGithubAccessToken(user.id)
+    await deleteGithubAccessToken(user.id)
   }
 
   res.clearCookie(AUTH_COOKIE_NAME, authCookieOptions)
